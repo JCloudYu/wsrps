@@ -1,0 +1,37 @@
+{
+	"name": "wsrps",
+	"version": "0.0.1",
+	"description": "RPC server/client that encode messages as BESON and communicate via websocket protocol ",
+	"main": "./_dist/index.js",
+	"scripts": {
+		"prebuild":"rm -rf ./build",
+		"build":"tsc",
+		"postbuild": "npm run _copyres",
+		
+		"_copyres": "copyfiles \"./lib/**/*\" ./build"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/JCloudYu/wsrps.git"
+	},
+	"keywords": [
+		"RPC",
+		"BESON",
+		"JSON",
+		"WebSocket"
+	],
+	"author": "JCloudYu",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/JCloudYu/wsrps/issues"
+	},
+	"homepage": "https://github.com/JCloudYu/wsrps#readme",
+	"devDependencies": {
+		"@types/websocket": "^1.0.5",
+		"copyfiles": "^2.4.1"
+	},
+	"dependencies": {
+		"beson": "^3.1.5",
+		"websocket": "^1.0.33"
+	}
+}
