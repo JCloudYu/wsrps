@@ -1,8 +1,8 @@
 {
 	"name": "wsrps",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "RPC server/client that encode messages as BESON and communicate via websocket protocol ",
-	"main": "./_dist/index.js",
+	"main": "./build/index.js",
 	"scripts": {
 		"prebuild":"rm -rf ./build",
 		"build":"tsc",
