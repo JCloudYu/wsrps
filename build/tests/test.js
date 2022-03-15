@@ -95,6 +95,10 @@ Promise.resolve().then(function () { return __awaiter(void 0, void 0, void 0, fu
                         console.log("Disconnected", args);
                     });
                 });
+                setTimeout(function () {
+                    console.log("Closing server...");
+                    server.close().then(function () { console.log("Server closed!"); });
+                }, 3000);
                 return [2 /*return*/];
         }
     });

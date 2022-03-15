@@ -131,6 +131,14 @@ export class WSRPServer extends EventEmitter {
 			});
 		})
 	}
+
+	close():Promise<void> {
+		const {http_server, ws_server} = _WSRPServer.get(this)!;
+		return new Promise((resolve, reject)=>{
+			ws_server.shutDown();
+			http_server.close((err)=>err?reject(err):resolve());
+		});
+	}
 }
 
 

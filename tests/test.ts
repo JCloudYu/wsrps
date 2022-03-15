@@ -47,4 +47,9 @@ Promise.resolve().then(async()=>{
 			console.log("Disconnected", args);
 		});
 	});
+
+	setTimeout(()=>{
+		console.log("Closing server...");
+		server.close().then(()=>{console.log("Server closed!")})
+	}, 3000);
 });

@@ -138,6 +138,13 @@ var WSRPServer = /** @class */ (function (_super) {
                 }], false));
         });
     };
+    WSRPServer.prototype.close = function () {
+        var _a = _WSRPServer.get(this), http_server = _a.http_server, ws_server = _a.ws_server;
+        return new Promise(function (resolve, reject) {
+            ws_server.shutDown();
+            http_server.close(function (err) { return err ? reject(err) : resolve(); });
+        });
+    };
     return WSRPServer;
 }(events_1.EventEmitter));
 exports.WSRPServer = WSRPServer;
