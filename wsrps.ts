@@ -4,7 +4,7 @@ import http from "http";
 import net from "net";
 import beson from "beson";
 import TrimId from "./lib/trimid.js";
-import {RPCErrResponse, RPCRequest, RPCResponse} from "./types.js";
+import {RPCErrResponse, RPCEvent, RPCRequest, RPCResponse} from "./types.js";
 
 
 
@@ -32,15 +32,30 @@ interface WSRPServerInit {
 interface WSPRrocedure {(this:ConnSession, ...args:any[]):any}
 class ConnSession {
 	private _close_info:null|{code?:number; reason?:string};
-	readonly ref:ws.connection;
+	readonly _ref:ws.connection;
 	constructor(conn:ws.connection) {
-		this.ref = conn;
+		this._ref = conn;
 		this._close_info = null;
 	}
 
-	get id():string { return _WSCONNPRofile.get(this.ref)!.id; }
-	get connect_time():number { return _WSCONNPRofile.get(this.ref)!.connect_time; }
+	get id():string { return _WSCONNPRofile.get(this._ref)!.id; }
+	get connect_time():number { return _WSCONNPRofile.get(this._ref)!.connect_time; }
 	get close_info():null|{code?:number; reason?:string} { return this._close_info ? {...this._close_info} : null; }
+	raw_send(data:string|Buffer|ArrayBuffer|Uint8Array):this {
+		if ( typeof data === "string" ) {
+			this._ref.sendUTF(data);
+		}
+		else {
+			this._ref.sendBytes(Buffer.from(data));
+		}
+
+		return this;
+	}
+	send(data:RPCResponse|RPCEvent, use_json:boolean=false):this {
+		return this.raw_send(
+			use_json ? JSON.stringify(data) : beson.Serialize(data)
+		);
+	}
 	disconnect(code=1000, reason=undefined) {
 		if (code !== undefined && typeof code !== "number") {
 			throw new TypeError("Param 'code' must be a number!");
