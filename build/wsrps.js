@@ -14,6 +14,17 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
 var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
         if (ar || !(i in from)) {
@@ -34,7 +45,39 @@ var http_1 = __importDefault(require("http"));
 var beson_1 = __importDefault(require("beson"));
 var trimid_js_1 = __importDefault(require("./lib/trimid.js"));
 ;
-;
+var ConnSession = /** @class */ (function () {
+    function ConnSession(conn) {
+        this.ref = conn;
+        this._close_info = null;
+    }
+    Object.defineProperty(ConnSession.prototype, "id", {
+        get: function () { return _WSCONNPRofile.get(this.ref).id; },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(ConnSession.prototype, "connect_time", {
+        get: function () { return _WSCONNPRofile.get(this.ref).connect_time; },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(ConnSession.prototype, "close_info", {
+        get: function () { return this._close_info ? __assign({}, this._close_info) : null; },
+        enumerable: false,
+        configurable: true
+    });
+    ConnSession.prototype.disconnect = function (code, reason) {
+        if (code === void 0) { code = 1000; }
+        if (reason === void 0) { reason = undefined; }
+        if (code !== undefined && typeof code !== "number") {
+            throw new TypeError("Param 'code' must be a number!");
+        }
+        if (reason !== undefined && typeof reason !== "string") {
+            throw new TypeError("Param 'reason' must be a string!");
+        }
+        this._close_info = { code: code, reason: reason };
+    };
+    return ConnSession;
+}());
 var DEFAULT_MAX_FORMAT_ERRORS = 5;
 var _WSCONNPRofile = new WeakMap();
 var _WSRPServer = new WeakMap();
@@ -64,6 +107,16 @@ var WSRPServer = /** @class */ (function (_super) {
         callmap[name] = callback;
         return this;
     };
+    WSRPServer.prototype.deregister = function (name) {
+        var callmap = _WSRPServer.get(this).callmap;
+        if (callmap[name]) {
+            delete callmap[name];
+        }
+        return this;
+    };
+    WSRPServer.prototype.on = function (event, callback) {
+        return _super.prototype.on.call(this, event, callback);
+    };
     WSRPServer.prototype.listen = function () {
         var args = [];
         for (var _i = 0; _i < arguments.length; _i++) {
@@ -92,21 +145,25 @@ function CLIENT_REQUESTED(request) {
     var connections = _WSRPServer.get(this).connections;
     var conn = request.accept();
     var conn_id = trimid_js_1.default.NEW.toString(32);
+    var connect_time = Math.floor(Date.now() / 1000);
     connections.set(conn_id, conn);
+    var session_ctrl = new ConnSession(conn);
     _WSCONNPRofile.set(conn, {
         id: conn_id,
         server: this,
-        connect_time: Math.floor(Date.now() / 1000),
+        connect_time: connect_time,
         error_counts: {
             invalid_format: 0
-        }
+        },
+        session: session_ctrl
     });
     conn.on('message', CLIENT_MESSAGE).on('close', CLIENT_CLOSED);
     console.log("Client ".concat(conn_id, " has connected!"));
+    this.emit('connected', session_ctrl);
 }
 function CLIENT_MESSAGE(message) {
     var _this = this;
-    var _a = _WSCONNPRofile.get(this), conn_id = _a.id, server = _a.server, error_counts = _a.error_counts, connect_time = _a.connect_time;
+    var _a = _WSCONNPRofile.get(this), conn_id = _a.id, server = _a.server, error_counts = _a.error_counts, connect_time = _a.connect_time, session = _a.session;
     var _b = _WSRPServer.get(server), callmap = _b.callmap, MAX_ALLOWED_FORMAT_ERRORS = _b.MAX_FORMAT_ERRORS;
     var data, use_json;
     if (message.type === 'utf8') {
@@ -149,24 +206,8 @@ function CLIENT_MESSAGE(message) {
         CLIENT_SEND_MSG(this, use_json, response);
         return;
     }
-    var close_info = null;
-    var conn_ctrl = {
-        id: conn_id,
-        disconnect: function (code, reason) {
-            if (code === void 0) { code = 1000; }
-            if (reason === void 0) { reason = undefined; }
-            if (code !== undefined && typeof code !== "number") {
-                throw new TypeError("Param 'code' must be a number!");
-            }
-            if (reason !== undefined && typeof reason !== "string") {
-                throw new TypeError("Param 'reason' must be a string!");
-            }
-            close_info = { code: code, reason: reason };
-        },
-        connect_time: connect_time
-    };
     Promise.resolve()
-        .then(function () { return handler.call.apply(handler, __spreadArray([conn_ctrl], data.params, false)); })
+        .then(function () { return handler.call.apply(handler, __spreadArray([session], data.params, false)); })
         .then(function (res) { return CLIENT_SEND_MSG(_this, use_json, { id: data.id, result: res }); })
         .catch(function (e) {
         if (!(e instanceof Error)) {
@@ -184,16 +225,17 @@ function CLIENT_MESSAGE(message) {
             } });
     })
         .finally(function () {
-        if (close_info === null)
+        if (session.close_info === null)
             return;
-        _this.close(close_info.code, close_info.reason);
+        var _a = session.close_info, code = _a.code, reason = _a.reason;
+        _this.close(code, reason);
     });
 }
 function CLIENT_CLOSED(code, desc) {
-    var _a = _WSCONNPRofile.get(this), conn_id = _a.id, server = _a.server;
+    var _a = _WSCONNPRofile.get(this), conn_id = _a.id, server = _a.server, session = _a.session;
     var connections = _WSRPServer.get(server).connections;
     connections.delete(conn_id);
-    console.log("Client ".concat(conn_id, " has disconnected with (code:").concat(code, ", desc:").concat(desc, ")!"));
+    server.emit('disconnected', session, code, desc);
 }
 function CLIENT_SEND_MSG(conn, json, message) {
     if (json) {

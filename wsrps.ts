@@ -22,18 +22,37 @@ interface WSConnPrivates {
 	connect_time:number;
 	error_counts: {
 		invalid_format: number;
-	}
+	},
+	session: ConnSession
 }
 interface WSRPServerInit {
 	http_server?:http.Server;
 	max_format_errors?: number;
 };
-interface WSConnSessionCtrl {
-	id:WSConnPrivates['id'];
-	disconnect:{(code?:number, reason?:string):void};
-	connect_time: WSConnPrivates['connect_time'];
-};
-interface WSPRrocedure {(this:WSConnSessionCtrl, ...args:any[]):any}
+interface WSPRrocedure {(this:ConnSession, ...args:any[]):any}
+class ConnSession {
+	private _close_info:null|{code?:number; reason?:string};
+	readonly ref:ws.connection;
+	constructor(conn:ws.connection) {
+		this.ref = conn;
+		this._close_info = null;
+	}
+
+	get id():string { return _WSCONNPRofile.get(this.ref)!.id; }
+	get connect_time():number { return _WSCONNPRofile.get(this.ref)!.connect_time; }
+	get close_info():null|{code?:number; reason?:string} { return this._close_info ? {...this._close_info} : null; }
+	disconnect(code=1000, reason=undefined) {
+		if (code !== undefined && typeof code !== "number") {
+			throw new TypeError("Param 'code' must be a number!");
+		}
+		if (reason !== undefined && typeof reason !== "string") {
+			throw new TypeError("Param 'reason' must be a string!");
+		}
+
+		this._close_info = {code, reason};
+	}
+}
+
 
 
 
@@ -41,6 +60,9 @@ interface WSPRrocedure {(this:WSConnSessionCtrl, ...args:any[]):any}
 const DEFAULT_MAX_FORMAT_ERRORS = 5;
 const _WSCONNPRofile:WeakMap<ws.connection, WSConnPrivates> = new WeakMap();
 const _WSRPServer:WeakMap<WSRPServer, WSRPServerPrivates> = new WeakMap();
+
+
+
 export class WSRPServer extends EventEmitter {
 	constructor(options?:WSRPServerInit) {
 		super();
@@ -70,9 +92,22 @@ export class WSRPServer extends EventEmitter {
 		callmap[name] = callback;
 		return this;
 	}
+	deregister(name:string):this {
+		const {callmap} = _WSRPServer.get(this)!;
+		if ( callmap[name] ) {
+			delete callmap[name];
+		}
+		
+		return this;
+	}
 
 
-	
+	on(event:'connected', callback:{(conn:ConnSession):void}):this;
+	on(event:string, callback:{(...args:any[]):void}):this;
+	on(event:string, callback:{(...args:any[]):void}):this {
+		return super.on(event, callback);
+	}
+
 	listen(port?: number, hostname?: string, backlog?: number):Promise<string>;
 	listen(port?: number, hostname?: string): Promise<string>;
 	listen(port?: number, backlog?: number): Promise<string>;
@@ -99,26 +134,34 @@ export class WSRPServer extends EventEmitter {
 }
 
 
+
+
 function CLIENT_REQUESTED(this:WSRPServer, request:ws.request) {
 	const {connections} = _WSRPServer.get(this)!;
 	const conn = request.accept();
 	const conn_id = TrimId.NEW.toString(32);
+	const connect_time = Math.floor(Date.now()/1000);
+
 	connections.set(conn_id, conn);
+	
+	const session_ctrl = new ConnSession(conn);
 	_WSCONNPRofile.set(conn, {
 		id:conn_id,
 		server:this,
-		connect_time: Math.floor(Date.now()/1000),
+		connect_time,
 		error_counts: {
 			invalid_format: 0
-		}
+		},
+		session: session_ctrl
 	});
 
 	conn.on('message', CLIENT_MESSAGE).on('close', CLIENT_CLOSED);
 	console.log(`Client ${conn_id} has connected!`);
+	this.emit('connected', session_ctrl);
 }
 
 function CLIENT_MESSAGE(this:ws.connection, message:ws.Message) {
-	const {id:conn_id, server, error_counts, connect_time} = _WSCONNPRofile.get(this)!;
+	const {id:conn_id, server, error_counts, connect_time, session} = _WSCONNPRofile.get(this)!;
 	const {callmap, MAX_FORMAT_ERRORS: MAX_ALLOWED_FORMAT_ERRORS} = _WSRPServer.get(server)!;
 
 
@@ -175,25 +218,8 @@ function CLIENT_MESSAGE(this:ws.connection, message:ws.Message) {
 
 
 
-	let close_info:{code?:number; reason?:string}|null = null;
-	const conn_ctrl:WSConnSessionCtrl = {
-		id: conn_id,
-		disconnect:(code=1000, reason=undefined)=>{
-			if (code !== undefined && typeof code !== "number") {
-				throw new TypeError("Param 'code' must be a number!");
-			}
-			if (reason !== undefined && typeof reason !== "string") {
-				throw new TypeError("Param 'reason' must be a string!");
-			}
-
-			close_info = {code, reason};
-		},
-		connect_time
-	};
-
-
 	Promise.resolve()
-	.then(()=>handler.call(conn_ctrl, ...data.params))
+	.then(()=>handler.call(session, ...data.params))
 	.then((res)=>CLIENT_SEND_MSG(this, use_json, {id:data.id, result:res}))
 	.catch((e:Error&{code?:string; data?:any})=>{
 		if ( !(e instanceof Error) ) {
@@ -214,16 +240,17 @@ function CLIENT_MESSAGE(this:ws.connection, message:ws.Message) {
 		}});
 	})
 	.finally(()=>{
-		if ( close_info === null ) return;
-		this.close(close_info.code, close_info.reason);
+		if ( session.close_info === null ) return;
+		const {code, reason} = session.close_info;
+		this.close(code, reason);
 	});
 }
 function CLIENT_CLOSED(this:ws.connection, code:number, desc:string) {
-	const {id:conn_id, server} = _WSCONNPRofile.get(this)!;
+	const {id:conn_id, server, session} = _WSCONNPRofile.get(this)!;
 	const {connections} = _WSRPServer.get(server)!;
 	connections.delete(conn_id);
 
-	console.log(`Client ${conn_id} has disconnected with (code:${code}, desc:${desc})!`);
+	server.emit('disconnected', session, code, desc);
 }
 function CLIENT_SEND_MSG(conn:ws.connection, json:boolean, message:RPCResponse) {
 	if ( json ) {
