@@ -73,7 +73,6 @@ var WSRPSConnection = /** @class */ (function () {
     };
     WSRPSConnection.prototype.disconnect = function (code, reason) {
         if (code === void 0) { code = 1000; }
-        if (reason === void 0) { reason = undefined; }
         if (code !== undefined && typeof code !== "number") {
             throw new TypeError("Param 'code' must be a number!");
         }
