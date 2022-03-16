@@ -263,7 +263,7 @@ function CLIENT_MESSAGE(this:ws.connection, message:ws.Message) {
 		}
 
 
-		console.error("Received unexpected error when")
+		console.error(`Received unexpected error when executing procedure (id:${data.id}, method:${data.method})!`, e);
 		CLIENT_SEND_MSG(this, use_json, {id:data.id, error: {
 			code: e.code||'error#unkown-error',
 			message: e.message,

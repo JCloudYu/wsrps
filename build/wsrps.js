@@ -231,7 +231,7 @@ function CLIENT_MESSAGE(message) {
             new_error.data = { error: e, method: data.method };
             e = new_error;
         }
-        console.error("Received unexpected error when");
+        console.error("Received unexpected error when executing procedure (id:".concat(data.id, ", method:").concat(data.method, ")!"), e);
         CLIENT_SEND_MSG(_this, use_json, { id: data.id, error: {
                 code: e.code || 'error#unkown-error',
                 message: e.message,
@@ -253,8 +253,14 @@ function CLIENT_SEND_MSG(conn, arg2, arg3) {
     if (typeof arg2 === "string") {
         sent_data = arg2;
     }
-    else if (arg2 instanceof ArrayBuffer || Buffer.isBuffer(arg2) || arg2 instanceof Uint8Array) {
+    else if (Buffer.isBuffer(arg2)) {
+        sent_data = arg2;
+    }
+    else if (arg2 instanceof ArrayBuffer) {
         sent_data = Buffer.from(arg2);
+    }
+    else if (arg2 instanceof Uint8Array) {
+        sent_data = Buffer.from(arg2.buffer);
     }
     else if (typeof arg2 === "boolean") {
         if (arg3 === undefined) {
