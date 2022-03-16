@@ -135,7 +135,6 @@ var WSRPServer = /** @class */ (function (_super) {
             http_server.once('error', reject);
             http_server.listen.apply(http_server, __spreadArray(__spreadArray([], args, false), [function () {
                     var addr_info = http_server.address();
-                    console.log(addr_info);
                     if (addr_info === null)
                         return resolve('');
                     if (typeof addr_info === "string")
@@ -173,7 +172,6 @@ function CLIENT_REQUESTED(request) {
         session: session_ctrl
     });
     conn.on('message', CLIENT_MESSAGE).on('close', CLIENT_CLOSED);
-    console.log("Client ".concat(conn_id, " has connected!"));
     this.emit('connected', session_ctrl);
 }
 function CLIENT_MESSAGE(message) {

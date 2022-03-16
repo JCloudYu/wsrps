@@ -147,7 +147,6 @@ export class WSRPServer extends EventEmitter {
 			http_server.once('error', reject);
 			http_server.listen(...args, ()=>{
 				const addr_info = http_server.address()!;
-				console.log(addr_info);
 				if ( addr_info === null ) return resolve('');
 				if ( typeof addr_info === "string" ) return resolve(addr_info);
 				if ( addr_info.family === 'IPv6' ) return resolve(`[${addr_info.address}]:${addr_info.port}`);
@@ -188,7 +187,6 @@ function CLIENT_REQUESTED(this:WSRPServer, request:ws.request) {
 	});
 
 	conn.on('message', CLIENT_MESSAGE).on('close', CLIENT_CLOSED);
-	console.log(`Client ${conn_id} has connected!`);
 	this.emit('connected', session_ctrl);
 }
 
