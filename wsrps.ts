@@ -23,30 +23,50 @@ interface WSConnPrivates {
 	error_counts: {
 		invalid_format: number;
 	},
-	session: ConnSession
+	session: WSRPSConnection
 }
 interface WSRPServerInit {
 	http_server?:http.Server;
 	max_format_errors?: number;
 };
-interface WSPRrocedure {(this:ConnSession, ...args:any[]):any}
-class ConnSession {
-	private _close_info:null|{code?:number; reason?:string};
-	readonly _ref:ws.connection;
+
+
+export interface WSPRrocedure {(this:WSRPSConnection, ...args:any[]):any}
+
+
+
+const _WSRPSConnection:WeakMap<WSRPSConnection, {
+	ref_conn:ws.connection;
+	close_info:null|{code?:number; reason?:string};
+}> = new WeakMap();
+
+export class WSRPSConnection {
 	constructor(conn:ws.connection) {
-		this._ref = conn;
-		this._close_info = null;
+		_WSRPSConnection.set(this, {
+			ref_conn:conn,
+			close_info:null
+		});
 	}
 
-	get id():string { return _WSCONNPRofile.get(this._ref)!.id; }
-	get connect_time():number { return _WSCONNPRofile.get(this._ref)!.connect_time; }
-	get close_info():null|{code?:number; reason?:string} { return this._close_info ? {...this._close_info} : null; }
+	get id():string {
+		const ref = _WSRPSConnection.get(this)!.ref_conn;
+		return _WSCONNPRofile.get(ref)!.id;
+	}
+	get connect_time():number {
+		const ref = _WSRPSConnection.get(this)!.ref_conn;
+		return _WSCONNPRofile.get(ref)!.connect_time;
+	}
+	get close_info():null|{code?:number; reason?:string} {
+		const close_info = _WSRPSConnection.get(this)!.close_info;
+		return close_info ? {...close_info} : null;
+	}
 	raw_send(data:string|Buffer|ArrayBuffer|Uint8Array):this {
+		const ref = _WSRPSConnection.get(this)!.ref_conn;
 		if ( typeof data === "string" ) {
-			this._ref.sendUTF(data);
+			ref.sendUTF(data);
 		}
 		else {
-			this._ref.sendBytes(Buffer.from(data));
+			ref.sendBytes(Buffer.from(data));
 		}
 
 		return this;
@@ -64,7 +84,7 @@ class ConnSession {
 			throw new TypeError("Param 'reason' must be a string!");
 		}
 
-		this._close_info = {code, reason};
+		_WSRPSConnection.get(this)!.close_info = {code, reason};
 	}
 }
 
@@ -117,7 +137,7 @@ export class WSRPServer extends EventEmitter {
 	}
 
 
-	on(event:'connected', callback:{(conn:ConnSession):void}):this;
+	on(event:'connected', callback:{(conn:WSRPSConnection):void}):this;
 	on(event:string, callback:{(...args:any[]):void}):this;
 	on(event:string, callback:{(...args:any[]):void}):this {
 		return super.on(event, callback);
@@ -167,7 +187,7 @@ function CLIENT_REQUESTED(this:WSRPServer, request:ws.request) {
 
 	connections.set(conn_id, conn);
 	
-	const session_ctrl = new ConnSession(conn);
+	const session_ctrl = new WSRPSConnection(conn);
 	_WSCONNPRofile.set(conn, {
 		id:conn_id,
 		server:this,

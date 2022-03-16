@@ -38,34 +38,60 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WSRPServer = void 0;
+exports.WSRPServer = exports.WSRPSConnection = void 0;
 var events_1 = require("events");
 var websocket_1 = __importDefault(require("websocket"));
 var http_1 = __importDefault(require("http"));
 var beson_1 = __importDefault(require("beson"));
 var trimid_js_1 = __importDefault(require("./lib/trimid.js"));
 ;
-var ConnSession = /** @class */ (function () {
-    function ConnSession(conn) {
-        this.ref = conn;
-        this._close_info = null;
+var _WSRPSConnection = new WeakMap();
+var WSRPSConnection = /** @class */ (function () {
+    function WSRPSConnection(conn) {
+        _WSRPSConnection.set(this, {
+            ref_conn: conn,
+            close_info: null
+        });
     }
-    Object.defineProperty(ConnSession.prototype, "id", {
-        get: function () { return _WSCONNPRofile.get(this.ref).id; },
+    Object.defineProperty(WSRPSConnection.prototype, "id", {
+        get: function () {
+            var ref = _WSRPSConnection.get(this).ref_conn;
+            return _WSCONNPRofile.get(ref).id;
+        },
         enumerable: false,
         configurable: true
     });
-    Object.defineProperty(ConnSession.prototype, "connect_time", {
-        get: function () { return _WSCONNPRofile.get(this.ref).connect_time; },
+    Object.defineProperty(WSRPSConnection.prototype, "connect_time", {
+        get: function () {
+            var ref = _WSRPSConnection.get(this).ref_conn;
+            return _WSCONNPRofile.get(ref).connect_time;
+        },
         enumerable: false,
         configurable: true
     });
-    Object.defineProperty(ConnSession.prototype, "close_info", {
-        get: function () { return this._close_info ? __assign({}, this._close_info) : null; },
+    Object.defineProperty(WSRPSConnection.prototype, "close_info", {
+        get: function () {
+            var close_info = _WSRPSConnection.get(this).close_info;
+            return close_info ? __assign({}, close_info) : null;
+        },
         enumerable: false,
         configurable: true
     });
-    ConnSession.prototype.disconnect = function (code, reason) {
+    WSRPSConnection.prototype.raw_send = function (data) {
+        var ref = _WSRPSConnection.get(this).ref_conn;
+        if (typeof data === "string") {
+            ref.sendUTF(data);
+        }
+        else {
+            ref.sendBytes(Buffer.from(data));
+        }
+        return this;
+    };
+    WSRPSConnection.prototype.send = function (data, use_json) {
+        if (use_json === void 0) { use_json = false; }
+        return this.raw_send(use_json ? JSON.stringify(data) : beson_1.default.Serialize(data));
+    };
+    WSRPSConnection.prototype.disconnect = function (code, reason) {
         if (code === void 0) { code = 1000; }
         if (reason === void 0) { reason = undefined; }
         if (code !== undefined && typeof code !== "number") {
@@ -74,10 +100,11 @@ var ConnSession = /** @class */ (function () {
         if (reason !== undefined && typeof reason !== "string") {
             throw new TypeError("Param 'reason' must be a string!");
         }
-        this._close_info = { code: code, reason: reason };
+        _WSRPSConnection.get(this).close_info = { code: code, reason: reason };
     };
-    return ConnSession;
+    return WSRPSConnection;
 }());
+exports.WSRPSConnection = WSRPSConnection;
 var DEFAULT_MAX_FORMAT_ERRORS = 5;
 var _WSCONNPRofile = new WeakMap();
 var _WSRPServer = new WeakMap();
@@ -154,7 +181,7 @@ function CLIENT_REQUESTED(request) {
     var conn_id = trimid_js_1.default.NEW.toString(32);
     var connect_time = Math.floor(Date.now() / 1000);
     connections.set(conn_id, conn);
-    var session_ctrl = new ConnSession(conn);
+    var session_ctrl = new WSRPSConnection(conn);
     _WSCONNPRofile.set(conn, {
         id: conn_id,
         server: this,
