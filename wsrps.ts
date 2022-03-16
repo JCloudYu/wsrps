@@ -291,8 +291,16 @@ function CLIENT_SEND_MSG(conn:ws.connection, arg2:boolean|string|Buffer|ArrayBuf
 		sent_data = arg2;
 	}
 	else 
-	if ( arg2 instanceof ArrayBuffer || Buffer.isBuffer(arg2) || arg2 instanceof Uint8Array ) {
+	if ( Buffer.isBuffer(arg2) ) {
+		sent_data = arg2;
+	}
+	else
+	if ( arg2 instanceof ArrayBuffer ) {
 		sent_data = Buffer.from(arg2);
+	}
+	else
+	if ( arg2 instanceof Uint8Array ) {
+		sent_data = Buffer.from(arg2.buffer);
 	}
 	else 
 	if ( typeof arg2 === "boolean" ){
