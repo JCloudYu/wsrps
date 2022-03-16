@@ -37,14 +37,12 @@ export interface WSPRrocedure {(this:WSRPSConnection, ...args:any[]):any}
 
 const _WSRPSConnection:WeakMap<WSRPSConnection, {
 	ref_conn:ws.connection;
-	close_info:null|{code?:number; reason?:string};
 }> = new WeakMap();
 
 export class WSRPSConnection {
 	constructor(conn:ws.connection) {
 		_WSRPSConnection.set(this, {
-			ref_conn:conn,
-			close_info:null
+			ref_conn:conn
 		});
 	}
 
@@ -56,25 +54,14 @@ export class WSRPSConnection {
 		const ref = _WSRPSConnection.get(this)!.ref_conn;
 		return _WSCONNPRofile.get(ref)!.connect_time;
 	}
-	get close_info():null|{code?:number; reason?:string} {
-		const close_info = _WSRPSConnection.get(this)!.close_info;
-		return close_info ? {...close_info} : null;
-	}
+	get connected():boolean { return _WSRPSConnection.get(this)!.ref_conn.connected; }
 	raw_send(data:string|Buffer|ArrayBuffer|Uint8Array):this {
-		const ref = _WSRPSConnection.get(this)!.ref_conn;
-		if ( typeof data === "string" ) {
-			ref.sendUTF(data);
-		}
-		else {
-			ref.sendBytes(Buffer.from(data));
-		}
-
+		CLIENT_SEND_MSG(_WSRPSConnection.get(this)!.ref_conn, data);
 		return this;
 	}
 	send(data:RPCResponse|RPCEvent, use_json:boolean=false):this {
-		return this.raw_send(
-			use_json ? JSON.stringify(data) : beson.Serialize(data)
-		);
+		CLIENT_SEND_MSG(_WSRPSConnection.get(this)!.ref_conn, use_json, data);
+		return this;
 	}
 	disconnect(code=1000, reason=undefined) {
 		if (code !== undefined && typeof code !== "number") {
@@ -84,7 +71,9 @@ export class WSRPSConnection {
 			throw new TypeError("Param 'reason' must be a string!");
 		}
 
-		_WSRPSConnection.get(this)!.close_info = {code, reason};
+		if ( this.connected ) {
+			_WSRPSConnection.get(this)!.ref_conn.close(code, reason);
+		}
 	}
 }
 
@@ -281,11 +270,6 @@ function CLIENT_MESSAGE(this:ws.connection, message:ws.Message) {
 			stack: e.stack,
 			data: e.data
 		}});
-	})
-	.finally(()=>{
-		if ( session.close_info === null ) return;
-		const {code, reason} = session.close_info;
-		this.close(code, reason);
 	});
 }
 function CLIENT_CLOSED(this:ws.connection, code:number, desc:string) {
@@ -295,11 +279,39 @@ function CLIENT_CLOSED(this:ws.connection, code:number, desc:string) {
 
 	server.emit('disconnected', session, code, desc);
 }
-function CLIENT_SEND_MSG(conn:ws.connection, json:boolean, message:RPCResponse) {
-	if ( json ) {
-		conn.sendUTF(JSON.stringify(message));
+
+function CLIENT_SEND_MSG(conn:ws.connection, message:string|Buffer|ArrayBuffer|Uint8Array):void;
+function CLIENT_SEND_MSG(conn:ws.connection, json:boolean, message:RPCResponse|RPCEvent):void;
+function CLIENT_SEND_MSG(conn:ws.connection, arg2:boolean|string|Buffer|ArrayBuffer|Uint8Array, arg3?:RPCResponse|RPCEvent):void {
+	if ( !conn.connected ) return;
+	
+
+	let sent_data:string|Buffer;
+	if ( typeof arg2 === "string" ) {
+		sent_data = arg2;
+	}
+	else 
+	if ( arg2 instanceof ArrayBuffer || Buffer.isBuffer(arg2) || arg2 instanceof Uint8Array ) {
+		sent_data = Buffer.from(arg2);
+	}
+	else 
+	if ( typeof arg2 === "boolean" ){
+		if ( arg3 === undefined ) {
+			throw new SyntaxError("Message payload is required!");
+		}
+
+		sent_data = arg2 ? JSON.stringify(arg3) : Buffer.from(beson.Serialize(arg3));
 	}
 	else {
-		conn.sendBytes(Buffer.from(beson.Serialize(message)));
+		throw new SyntaxError("The second argument must be either a boolean, an ArrayBuffer, an Uint8Array or a Buffer");
+	}
+
+
+	
+	if ( Buffer.isBuffer(sent_data) ) {
+		conn.sendBytes(sent_data);
+	}
+	else {
+		conn.sendUTF(sent_data);
 	}
 }

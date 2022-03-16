@@ -16,7 +16,12 @@ Promise.resolve().then(async()=>{
 	})
 	.on('connected', (_conn)=>{
 		conn = _conn;
-		console.log("connected", conn.id);
+		console.log("connected", _conn.id);
+		_conn.send({
+			event:'welcoming',
+			data:'Welcome to this virtual world!',
+			time:Math.floor(Date.now()/1000)
+		})
 	})
 	.on('disconnected', (_conn)=>{
 		console.log("disconnected", conn === _conn, _conn.id);

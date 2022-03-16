@@ -14,17 +14,6 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
-var __assign = (this && this.__assign) || function () {
-    __assign = Object.assign || function(t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-            s = arguments[i];
-            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
-                t[p] = s[p];
-        }
-        return t;
-    };
-    return __assign.apply(this, arguments);
-};
 var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
         if (ar || !(i in from)) {
@@ -49,8 +38,7 @@ var _WSRPSConnection = new WeakMap();
 var WSRPSConnection = /** @class */ (function () {
     function WSRPSConnection(conn) {
         _WSRPSConnection.set(this, {
-            ref_conn: conn,
-            close_info: null
+            ref_conn: conn
         });
     }
     Object.defineProperty(WSRPSConnection.prototype, "id", {
@@ -69,27 +57,19 @@ var WSRPSConnection = /** @class */ (function () {
         enumerable: false,
         configurable: true
     });
-    Object.defineProperty(WSRPSConnection.prototype, "close_info", {
-        get: function () {
-            var close_info = _WSRPSConnection.get(this).close_info;
-            return close_info ? __assign({}, close_info) : null;
-        },
+    Object.defineProperty(WSRPSConnection.prototype, "connected", {
+        get: function () { return _WSRPSConnection.get(this).ref_conn.connected; },
         enumerable: false,
         configurable: true
     });
     WSRPSConnection.prototype.raw_send = function (data) {
-        var ref = _WSRPSConnection.get(this).ref_conn;
-        if (typeof data === "string") {
-            ref.sendUTF(data);
-        }
-        else {
-            ref.sendBytes(Buffer.from(data));
-        }
+        CLIENT_SEND_MSG(_WSRPSConnection.get(this).ref_conn, data);
         return this;
     };
     WSRPSConnection.prototype.send = function (data, use_json) {
         if (use_json === void 0) { use_json = false; }
-        return this.raw_send(use_json ? JSON.stringify(data) : beson_1.default.Serialize(data));
+        CLIENT_SEND_MSG(_WSRPSConnection.get(this).ref_conn, use_json, data);
+        return this;
     };
     WSRPSConnection.prototype.disconnect = function (code, reason) {
         if (code === void 0) { code = 1000; }
@@ -100,7 +80,9 @@ var WSRPSConnection = /** @class */ (function () {
         if (reason !== undefined && typeof reason !== "string") {
             throw new TypeError("Param 'reason' must be a string!");
         }
-        _WSRPSConnection.get(this).close_info = { code: code, reason: reason };
+        if (this.connected) {
+            _WSRPSConnection.get(this).ref_conn.close(code, reason);
+        }
     };
     return WSRPSConnection;
 }());
@@ -257,12 +239,6 @@ function CLIENT_MESSAGE(message) {
                 stack: e.stack,
                 data: e.data
             } });
-    })
-        .finally(function () {
-        if (session.close_info === null)
-            return;
-        var _a = session.close_info, code = _a.code, reason = _a.reason;
-        _this.close(code, reason);
     });
 }
 function CLIENT_CLOSED(code, desc) {
@@ -271,11 +247,29 @@ function CLIENT_CLOSED(code, desc) {
     connections.delete(conn_id);
     server.emit('disconnected', session, code, desc);
 }
-function CLIENT_SEND_MSG(conn, json, message) {
-    if (json) {
-        conn.sendUTF(JSON.stringify(message));
+function CLIENT_SEND_MSG(conn, arg2, arg3) {
+    if (!conn.connected)
+        return;
+    var sent_data;
+    if (typeof arg2 === "string") {
+        sent_data = arg2;
+    }
+    else if (arg2 instanceof ArrayBuffer || Buffer.isBuffer(arg2) || arg2 instanceof Uint8Array) {
+        sent_data = Buffer.from(arg2);
+    }
+    else if (typeof arg2 === "boolean") {
+        if (arg3 === undefined) {
+            throw new SyntaxError("Message payload is required!");
+        }
+        sent_data = arg2 ? JSON.stringify(arg3) : Buffer.from(beson_1.default.Serialize(arg3));
     }
     else {
-        conn.sendBytes(Buffer.from(beson_1.default.Serialize(message)));
+        throw new SyntaxError("The second argument must be either a boolean, an ArrayBuffer, an Uint8Array or a Buffer");
+    }
+    if (Buffer.isBuffer(sent_data)) {
+        conn.sendBytes(sent_data);
+    }
+    else {
+        conn.sendUTF(sent_data);
     }
 }

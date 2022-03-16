@@ -21,6 +21,6 @@ export type RPCResponse = RPCSuccResponse|RPCErrResponse;
 export interface RPCEvent {
 	id?: string;
 	event: string;
-	data: any;
+	data?: any;
 	time: epoch;
 };
