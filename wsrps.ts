@@ -63,7 +63,7 @@ export class WSRPSConnection {
 		CLIENT_SEND_MSG(_WSRPSConnection.get(this)!.ref_conn, use_json, data);
 		return this;
 	}
-	disconnect(code=1000, reason=undefined) {
+	disconnect(code:number=1000, reason?:string) {
 		if (code !== undefined && typeof code !== "number") {
 			throw new TypeError("Param 'code' must be a number!");
 		}
