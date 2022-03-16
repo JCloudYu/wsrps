@@ -252,7 +252,19 @@ function CLIENT_MESSAGE(this:ws.connection, message:ws.Message) {
 
 	Promise.resolve()
 	.then(()=>handler.call(session, ...data.params))
-	.then((res)=>CLIENT_SEND_MSG(this, use_json, {id:data.id, result:res}))
+	.then((res:RPCRequest|(Error&{code?:string; data?:any}))=>{
+		if ( res instanceof Error ) {
+			CLIENT_SEND_MSG(this, use_json, {id:data.id, error:{
+				code: res.code||'error#unkown-error',
+				message: res.message,
+				stack: res.stack,
+				data: res.data
+			}})
+			return;
+		}
+
+		CLIENT_SEND_MSG(this, use_json, {id:data.id, result:res})
+	})
 	.catch((e:Error&{code?:string; data?:any})=>{
 		if ( !(e instanceof Error) ) {
 			console.error(`Catched none error rejection from client ${conn_id} (id:${data.id}, method:${data.method})!`, e);

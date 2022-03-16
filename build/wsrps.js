@@ -223,7 +223,18 @@ function CLIENT_MESSAGE(message) {
     }
     Promise.resolve()
         .then(function () { return handler.call.apply(handler, __spreadArray([session], data.params, false)); })
-        .then(function (res) { return CLIENT_SEND_MSG(_this, use_json, { id: data.id, result: res }); })
+        .then(function (res) {
+        if (res instanceof Error) {
+            CLIENT_SEND_MSG(_this, use_json, { id: data.id, error: {
+                    code: res.code || 'error#unkown-error',
+                    message: res.message,
+                    stack: res.stack,
+                    data: res.data
+                } });
+            return;
+        }
+        CLIENT_SEND_MSG(_this, use_json, { id: data.id, result: res });
+    })
         .catch(function (e) {
         if (!(e instanceof Error)) {
             console.error("Catched none error rejection from client ".concat(conn_id, " (id:").concat(data.id, ", method:").concat(data.method, ")!"), e);
